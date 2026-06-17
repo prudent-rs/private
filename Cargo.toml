@@ -1,0 +1,32 @@
+[package]
+name = "private"
+version = "0.0.1"
+edition = "2024"
+
+# edition = "2021"
+
+# Full functionality and tests need Rust 1.89.0+.
+#
+# See also .github/workflows/main.yml.
+#
+#rust-version = "1.71.0"
+
+license = "BSD-2-Clause OR Apache-2.0 OR MIT"
+
+authors = ["Peter Lyons Kehl<peter.kehl@gmail.com>"]
+description = "Help you make Rust code more accident-proof. Macros to enable other crates to export macros (either declarative/by example/using `macro_rules`, or procedural) that have private-like variables or constants."
+
+categories = ["development-tools", "no-std", "no-std::no-alloc", "rust-patterns", "security"]
+
+keywords = ["safe", "safety", "unsafe", "isolation", "review"]
+
+repository = "https://github.com/prudent-rs/private"
+homepage = "https://github.com/prudent-rs/private"
+
+# "lints" key is supported only since Rust 1.74.0 (November 2023). But we include this even though
+# our rust-version/MSRV is 1.71.0.
+[lints.rust]
+unexpected_cfgs = { level = "forbid"}
+unknown_lints = { level = "forbid"}
+
+[dependencies]
