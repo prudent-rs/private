@@ -27,10 +27,12 @@ static RND_PART: LazyLock<String> = LazyLock::new(|| {
 fn ident(macro_crate: Path, given_name: Ident) -> Ident {
     let span = given_name.span();
     let macro_crate = macro_crate.into_token_stream().to_string();
-    let macro_crate = macro_crate.replace(':', "_");
+    let macro_crate = macro_crate.replace(':', "_"); // this creates a new String - that's OK.
 
-    let rnd_part = *RND_PART;
-    let full_name = format!("{macro_crate}_private_{rnd_part}_given_name");
+    let rnd_part = &*RND_PART;
+    // Intentionally putting the random part at the end, to make errors/warnings more
+    // relevant/searchable.
+    let full_name = format!("{macro_crate}_private_given_name_{rnd_part}");
     Ident::new(&full_name, span)
 }
 
@@ -83,6 +85,19 @@ pub fn use_const(input: ProcTokenStream) -> ProcTokenStream {
 }
 // --------------
 
+// @TODO generate code that
+// 1. defines the let/mut/const
+// 2. defines local (non-exported) macro_rules! local-variable-name-here
+//    - BUT: if we do define (even just local) macro_rules! local-variable-name-here, then
+//      - we definitely need to include $crate, to avoid conflicts; and
+//      - worse: that consumer macro couldn't be called multiple times in the same scope
+//        (conflicting macro_rules!)
+//      - without local macro_rules, that crate's macro(s) can be invoked multiple times in the same
+//        scope, and any variables are shadowed.
+//
+// BUT: where/how do we include that consumer macro's $crate path? -> it would be HERE
+//
+// 
 fn def_let_impl(input: TokenStream) -> MacroStreamResult {
     rules!(input => {
         ( $name:ident = $value:expr) => {

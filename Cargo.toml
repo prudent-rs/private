@@ -12,7 +12,8 @@ edition = "2021"
 #
 # See also .github/workflows/main.yml.
 #
-# @TODO: fin with cargo msrv, but min. 1.80.0
+# @TODO: fin with cargo msrv, but min. 1.80.0 because of
+# https://doc.rust-lang.org/std/sync/struct.LazyLock.html
 #
 rust-version = "1.80.0"
 
