@@ -114,7 +114,7 @@ pub fn use_const(input: ProcTokenStream) -> ProcTokenStream {
 //
 // custom_macro!( some-input-here... custom_macro!(...) ... )
 //
-// - unless the macro developer designed it so (that is, any expressions in the inpuit would be
+// - unless the macro developer designed it so (that is, any expressions in the input would be
 //   sub-scoped, like in a block {...}).
 //
 // NOT watt-compatible (because of side effects of build.rs).
