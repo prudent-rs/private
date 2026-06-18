@@ -1,13 +1,13 @@
 #![doc = include_str!("../README.md")]
 
 use dis::prelude_ext::{alloc::*, core::*, proc_macro2_diagnostics::*};
-use dis::{assert, Displayish, MacroDeepResult, MacroDiagnosticResult};
+use dis::{Displayish, MacroDeepResult, MacroDiagnosticResult, assert};
 
 use proc_macro::TokenStream as ProcTokenStream;
-use proc_macro2::{Literal, Span, TokenStream};
 use proc_macro_rules::rules;
+use proc_macro2::{Literal, Span, TokenStream};
 
-use quote::{quote_spanned, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote_spanned};
 use std::sync::LazyLock;
 use syn::{Expr, Ident, Path, Type};
 

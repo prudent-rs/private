@@ -1,21 +1,10 @@
 [package]
 name = "private"
 version = "0.0.2"
-# TODO
-#
-#edition = "2024"
-edition = "2021"
+edition = "2024"
 
-# edition = "2021"
-
-# Full functionality and tests need Rust 1.89.0+.
-#
-# See also .github/workflows/main.yml.
-#
-# @TODO: fin with cargo msrv, but min. 1.80.0 because of
-# https://doc.rust-lang.org/std/sync/struct.LazyLock.html
-#
-rust-version = "1.80.0"
+# because of crate random_str
+rust-version = "1.85.0"
 
 license = "BSD-2-Clause OR Apache-2.0 OR MIT"
 
@@ -45,9 +34,6 @@ proc-macro2 = {version="1.0.60", features=["span-locations"] }
 #
 # dis = { version = "0.0.2", path = "../dis", features = ["proc-macro2-diagnostics"]}
 dis = { version = "0.0.2", features = ["proc-macro2-diagnostics"]}
-
-# EXACT VERSION with = prefix
-mce-lib = {version="= 0.0.4", path="../mce-lib", features=["std"]}
 
 quote = "1.0.26"
 
