@@ -32,8 +32,8 @@ proc-macro-rules = "0.4.0"
 proc-macro2 = {version="1.0.60", features=["span-locations"] }
 # for local development:
 #
-# dis = { version = "0.0.2", path = "../dis", features = ["proc-macro2-diagnostics"]}
-dis = { version = "0.0.2", features = ["proc-macro2-diagnostics"]}
+dis = { version = "0.0.3", path = "../dis", features = ["proc-macro2-diagnostics"]}
+#dis = { version = "0.0.3", features = ["proc-macro2-diagnostics"]}
 
 quote = "1.0.26"
 
