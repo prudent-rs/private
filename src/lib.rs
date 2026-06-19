@@ -238,12 +238,16 @@ fn def_let_or_mut_grammar(input: TokenStream, which: ConstStaticLetMut) -> Macro
         ( $name:ident:$ty:ty ) => {
             def_const_static_let_mut(which, &name, None, Some(&ty), None)
         }
-        ( $name:ident: @$path:path $ty:ty ) => {
+        ( $name:ident @$path:path :$ty:ty ) => {
             def_const_static_let_mut(which, &name, Some(&path), Some(&ty), None)
         }
     })
     .into()
 }
+
+/*macro_rules! _path_then_colon {
+    ($path:path)
+}*/
 
 fn at_grammar(input: TokenStream, which: ConstStaticLetMut) -> MacroStreamResult {
     Ok(rules!(input => {
@@ -287,14 +291,8 @@ fn def_const_static_let_mut(
     ty: Option<&Type>,
     value: Option<&Expr>,
 ) -> MacroStreamResult {
-    assert_eq!(
-        ty.is_some(),
-        which.requires_type_and_value_and_should_be_uppercase()
-    );
-    assert_eq!(
-        value.is_some(),
-        which.requires_type_and_value_and_should_be_uppercase()
-    );
+    assert!(!which.requires_type_and_value_and_should_be_uppercase() || ty.is_some());
+    assert!(!which.requires_type_and_value_and_should_be_uppercase() || value.is_some());
 
     let var_name = var_or_const_or_static_name(
         path,
