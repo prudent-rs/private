@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 
+use core::iter;
 use dis::prelude_ext::{alloc::*, core::*, proc_macro2_diagnostics::*};
 use dis::{Displayish, MacroDeepResult, MacroDiagnosticResult, MacroStreamResult, assert};
 
@@ -7,10 +8,10 @@ use proc_macro::TokenStream as ProcTokenStream;
 use proc_macro_rules::rules;
 use proc_macro2::{Literal, Span, TokenStream};
 
-use quote::{ToTokens, TokenStreamExt, quote_spanned};
+use quote::{ToTokens, TokenStreamExt, quote, quote_spanned};
 use std::str::FromStr;
 use std::sync::LazyLock;
-use syn::{Expr, Ident, Path, Type};
+use syn::{Expr, Ident, Path, PathArguments, PathSegment, Type, punctuated::Punctuated};
 
 mod file;
 
@@ -27,6 +28,15 @@ static RND_PART_UPPERCASE: LazyLock<String> = LazyLock::new(|| {
     value.make_ascii_uppercase();
     value
 });
+
+fn two_colons(span: Span) -> Path {
+    let leading_colon = None;
+    let segments = Punctuated::new();
+    Path {
+        leading_colon,
+        segments,
+    }
+}
 
 fn to_upper_lower_case(mut s: String, should_be_uppercase: bool) -> String {
     if s.is_ascii() {
@@ -52,20 +62,39 @@ fn var_or_const_or_static_name(
     should_be_uppercase: bool,
 ) -> Ident {
     let path_based_prefix = if let Some(macro_crate_and_path) = macro_crate_and_path {
-        let mut path_based_prefix = macro_crate_and_path.into_token_stream().to_string();
+        // Either of the following two approaches leaves extra spaces around :: path separators:
+        //
+        // let mut path_based_prefix = macro_crate_and_path.into_token_stream().to_string();
+        //
+        // let mut path_based_prefix = quote!{ #macro_crate_and_path }.to_string();
+        let iter = macro_crate_and_path.segments.iter();
+        let mut parts = Vec::with_capacity(2 * iter.len());
+        let mut total_len = 0;
+        iter.for_each(|seg| {
+            let ident = seg.ident.to_string();
+            total_len += ident.len() + 1;
+            parts.push(ident);
+        });
+
+        let mut path_based_prefix = String::with_capacity(total_len);
+        path_based_prefix.extend(
+            parts
+                .iter()
+                .map(|s| iter::once(&s[..]).chain(iter::once("_")))
+                .flatten(),
+        );
+
+        /*if true { panic!("{}", path_based_prefix);}*/
         let path_based_prefix = to_upper_lower_case(path_based_prefix, should_be_uppercase);
 
-        let mut path_based_prefix = path_based_prefix.replace("::", "_"); // this creates a new String - that's OK.
-        path_based_prefix.push('_');
+        //let mut path_based_prefix = path_based_prefix.replace("::", "_"); // this creates a new String - that's OK.
+
+        //path_based_prefix.push('_');
         Some(path_based_prefix)
     } else {
         None
     };
-    let path_based_prefix = if let Some(path_based_prefix) = &path_based_prefix {
-        path_based_prefix
-    } else {
-        ""
-    };
+    let path_based_prefix = path_based_prefix.as_ref().map_or("", |rf| &rf);
 
     let private_ = if should_be_uppercase {
         "PRIVATE_"
@@ -92,11 +121,35 @@ fn var_or_const_or_static_name(
 
 #[proc_macro]
 pub fn def_let(input: ProcTokenStream) -> ProcTokenStream {
-    match def_let_grammar(input.into()) {
+    match def_let_or_mut_grammar(input.into(), ConstStaticLetMut::LET) {
         Ok(output) => output.into(),
         Err(diag) => panic!("{:?}", diag), //diag.emit_as_expr_tokens().into(),
     }
 }
+#[proc_macro]
+pub fn def_mut(input: ProcTokenStream) -> ProcTokenStream {
+    match def_let_or_mut_grammar(input.into(), ConstStaticLetMut::MUT) {
+        Ok(output) => output.into(),
+        Err(diag) => panic!("{:?}", diag), //diag.emit_as_expr_tokens().into(),
+    }
+}
+// @TODO consider names: handle, get
+#[proc_macro]
+pub fn at_let(input: ProcTokenStream) -> ProcTokenStream {
+    match at_grammar(input.into(), ConstStaticLetMut::LET) {
+        Ok(output) => output.into(),
+        Err(diag) => panic!("{:?}", diag), //diag.emit_as_expr_tokens().into(),
+    }
+}
+
+#[proc_macro]
+pub fn at_mut(input: ProcTokenStream) -> ProcTokenStream {
+    match at_grammar(input.into(), ConstStaticLetMut::MUT) {
+        Ok(output) => output.into(),
+        Err(diag) => panic!("{:?}", diag), //diag.emit_as_expr_tokens().into(),
+    }
+}
+
 /*
 #[proc_macro]
 pub fn def_mut(input: ProcTokenStream) -> ProcTokenStream {
@@ -158,40 +211,53 @@ pub fn use_const(input: ProcTokenStream) -> ProcTokenStream {
 //
 // - unless the macro developer designed it so (that is, any expressions in the input would be
 //   sub-scoped, like in a block {...}).
-fn def_let_grammar(input: TokenStream) -> MacroStreamResult {
-    use ConstStaticLetMut::LET;
+fn def_let_or_mut_grammar(input: TokenStream, which: ConstStaticLetMut) -> MacroStreamResult {
+    assert!(which == ConstStaticLetMut::LET || which == ConstStaticLetMut::MUT);
     rules!(input => {
         ( $name:ident=$value:expr) => {
-            def_const_static_let_mut(LET, &name, None, None, Some(&value))
+            def_const_static_let_mut(which, &name, None, None, Some(&value))
         }
         ( $name:ident@$path:path=$value:expr ) => {
-            def_const_static_let_mut(LET, &name, Some(&path), None, Some(&value))
+            def_const_static_let_mut(which, &name, Some(&path), None, Some(&value))
         }
 
         ( $name:ident:$ty:ty = $value:expr ) => {
-            def_const_static_let_mut(LET, &name, None, Some(&ty), Some(&value))
+            def_const_static_let_mut(which, &name, None, Some(&ty), Some(&value))
         }
         ( $name:ident@$path:path:$ty:ty = $value:expr ) => {
-            def_const_static_let_mut(LET, &name, Some(&path), Some(&ty), Some(&value))
+            def_const_static_let_mut(which, &name, Some(&path), Some(&ty), Some(&value))
         }
 
         ( $name:ident ) => {
-            def_const_static_let_mut(LET, &name, None, None, None)
+            def_const_static_let_mut(which, &name, None, None, None)
         }
-        ( $name:ident@$path:path) => {
-            def_const_static_let_mut(LET, &name, Some(&path), None, None)
+        ( $name:ident @ $path:path) => {
+            def_const_static_let_mut(which, &name, Some(&path), None, None)
         }
 
         ( $name:ident:$ty:ty ) => {
-            def_const_static_let_mut(LET, &name, None, Some(&ty), None)
+            def_const_static_let_mut(which, &name, None, Some(&ty), None)
         }
-        ( $name:ident:@$path:path$ty:ty ) => {
-            def_const_static_let_mut(LET, &name, Some(&path), Some(&ty), None)
+        ( $name:ident: @$path:path $ty:ty ) => {
+            def_const_static_let_mut(which, &name, Some(&path), Some(&ty), None)
         }
     })
     .into()
 }
 
+fn at_grammar(input: TokenStream, which: ConstStaticLetMut) -> MacroStreamResult {
+    Ok(rules!(input => {
+        ( $name:ident) => {
+            at_impl(&name, None, which.requires_type_and_value_and_should_be_uppercase())
+        }
+        ( $name:ident@$path:path) => {
+            at_impl(&name, Some(&path), which.requires_type_and_value_and_should_be_uppercase())
+        }
+    })
+    .into())
+}
+
+/// Access choice for a var/value. For now (and hopefully forever) we ignore `static mut`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ConstStaticLetMut {
     CONST,
@@ -209,7 +275,7 @@ impl ConstStaticLetMut {
             Self::MUT => "let mut",
         }
     }
-    pub fn should_be_uppercase(&self) -> bool {
+    pub fn requires_type_and_value_and_should_be_uppercase(&self) -> bool {
         self == &Self::CONST || self == &Self::STATIC
     }
 }
@@ -221,7 +287,20 @@ fn def_const_static_let_mut(
     ty: Option<&Type>,
     value: Option<&Expr>,
 ) -> MacroStreamResult {
-    let var_name = var_or_const_or_static_name(path, name, which.should_be_uppercase());
+    assert_eq!(
+        ty.is_some(),
+        which.requires_type_and_value_and_should_be_uppercase()
+    );
+    assert_eq!(
+        value.is_some(),
+        which.requires_type_and_value_and_should_be_uppercase()
+    );
+
+    let var_name = var_or_const_or_static_name(
+        path,
+        name,
+        which.requires_type_and_value_and_should_be_uppercase(),
+    );
 
     let span = name.span();
 
@@ -249,24 +328,10 @@ fn def_const_static_let_mut(
     })
 }
 
-fn def_let_impl_forwarder(input: TokenStream) -> MacroStreamResult {
-    rules!(input => {
-        ( $name:ident @ $path:path = $value:expr) => {
-            let span = name.span();
-            let _ = path;
-            let _ = value;
-
-            Ok(quote_spanned! {span=>
-
-            })
-        }
-        ( $name:ident:$ty:ty = $value:expr) => {
-            let span = name.span();
-            let _ = ty;
-            Ok(quote_spanned! {span=>
-
-            })
-        }
-    })
-    .into()
+fn at_impl(name: &Ident, path: Option<&Path>, should_be_uppercase: bool) -> TokenStream {
+    let var_name = var_or_const_or_static_name(path, name, should_be_uppercase);
+    let span = name.span();
+    quote_spanned! {span=>
+        #var_name
+    }
 }
