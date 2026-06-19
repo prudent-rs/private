@@ -404,7 +404,10 @@ fn def_const_static_let_mut(
         TokenStream::new()
     };
     let direct_part = if direct {
+        // This works with rust-analyzer:
+        let doc = format!("(private) {name} {type_part}");
         quote_spanned! {span=>
+            #[doc = #doc]
             macro_rules! #name {
                 () => {
                     #var_name
