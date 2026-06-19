@@ -1,17 +1,17 @@
 #![doc = include_str!("../README.md")]
 
 use core::iter;
-use dis::prelude_ext::{alloc::*, core::*, proc_macro2_diagnostics::*};
-use dis::{Displayish, MacroDeepResult, MacroDiagnosticResult, MacroStreamResult, assert};
+use dis::MacroStreamResult;
+use dis::prelude_ext::{alloc::*, proc_macro2_diagnostics::*};
 
 use proc_macro::TokenStream as ProcTokenStream;
 use proc_macro_rules::rules;
-use proc_macro2::{Literal, Span, TokenStream};
+use proc_macro2::TokenStream;
 
-use quote::{ToTokens, TokenStreamExt, quote, quote_spanned};
+use quote::quote_spanned;
 use std::str::FromStr;
 use std::sync::LazyLock;
-use syn::{Expr, Ident, Path, PathArguments, PathSegment, Type, punctuated::Punctuated};
+use syn::{Expr, Ident, Path, Type};
 
 mod file;
 
@@ -32,15 +32,6 @@ static RND_PART_UPPERCASE: LazyLock<String> = LazyLock::new(|| {
     value.make_ascii_uppercase();
     value
 });
-
-fn two_colons(span: Span) -> Path {
-    let leading_colon = None;
-    let segments = Punctuated::new();
-    Path {
-        leading_colon,
-        segments,
-    }
-}
 
 fn to_upper_lower_case(mut s: String, should_be_uppercase: bool) -> String {
     if s.is_ascii() {
@@ -280,17 +271,17 @@ fn def_let_or_mut_grammar(
 ) -> MacroStreamResult {
     assert!(which == ConstStaticLetMut::LET || which == ConstStaticLetMut::MUT);
     rules!(input => {
-        ( $name:ident=$value:expr) => {
+        ( $name:ident = $value:expr) => {
             def_const_static_let_mut(which, &name, None, None, Some(&value), direct)
         }
-        ( $name:ident@$path:path=$value:expr ) => {
+        ( $name:ident @$path:path = $value:expr ) => {
             def_const_static_let_mut(which, &name, Some(&path), None, Some(&value), direct)
         }
 
-        ( $name:ident:$ty:ty = $value:expr ) => {
+        ( $name:ident: $ty:ty = $value:expr ) => {
             def_const_static_let_mut(which, &name, None, Some(&ty), Some(&value), direct)
         }
-        ( $name:ident@$path:path:$ty:ty = $value:expr ) => {
+        ( $name:ident @$path:path :$ty:ty = $value:expr ) => {
             def_const_static_let_mut(which, &name, Some(&path), Some(&ty), Some(&value), direct)
         }
 
@@ -404,9 +395,9 @@ fn def_const_static_let_mut(
         TokenStream::new()
     };
     let direct_part = if direct {
-        // This works with rust-analyzer:
         let doc = format!("(private) {name} {type_part}");
         quote_spanned! {span=>
+            // This works to generate tooltip/mouseover with rust-analyzer:
             #[doc = #doc]
             macro_rules! #name {
                 () => {
