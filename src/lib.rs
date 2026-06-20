@@ -55,7 +55,8 @@ fn to_upper_lower_case(mut s: String, should_be_uppercase: bool) -> String {
 // Compatible with Rust non-ASCII identifiers
 // (https://rust-lang.github.io/rfcs/2457-non-ascii-idents.html).
 fn var_or_const_or_static_name(
-    macro_crate_and_path: Option<&Path>,
+    at_direct_invocation_full_file_path: &str,
+    // @TODO helper_invocation_full_file_path: &str,
     given_name: &Ident,
     should_be_uppercase: bool,
 ) -> Ident {
@@ -204,7 +205,9 @@ pub fn at_static(input: ProcTokenStream) -> ProcTokenStream {
 }
 // --------------
 
+/// Internal - not for direct use.
 #[proc_macro]
+#[doc(hidden)]
 pub fn at_direct(input: ProcTokenStream) -> ProcTokenStream {
     match at_direct_grammar(input.into()) {
         Ok(output) => output.into(),
