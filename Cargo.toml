@@ -1,6 +1,6 @@
 [package]
-name = "private"
-version = "0.0.2"
+name = "restricted"
+version = "0.0.1"
 edition = "2024"
 
 # Requiring Rust 1.88 for https://doc.rust-lang.org/proc_macro/struct.Span.html#method.local_file.
@@ -9,14 +9,14 @@ rust-version = "1.88.0"
 license = "BSD-2-Clause OR Apache-2.0 OR MIT"
 
 authors = ["Peter Lyons Kehl<peter.kehl@gmail.com>"]
-description = "Help you make Rust code more accident-proof. Macros to enable other crates to export macros (either declarative/by example/using `macro_rules`, or procedural) with private-like variables or constants."
+description = "Prevent consumers of your Rust macros from accidents. Enable your crates to export private-like types, traits and functions that are to be used only by its own macro_rules."
 
 categories = ["development-tools", "no-std", "no-std::no-alloc", "rust-patterns", "security"]
 
-keywords = ["safe", "safety", "unsafe", "isolation", "review"]
+keywords = ["isolation", "macro", "macro_rules", "macros"]
 
-repository = "https://github.com/prudent-rs/private"
-homepage = "https://github.com/prudent-rs/private"
+repository = "https://github.com/prudent-rs/restricted"
+homepage = "https://github.com/prudent-rs/restricted"
 
 [lib]
 proc-macro = true

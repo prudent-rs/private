@@ -183,20 +183,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "private"
-version = "0.0.2"
-dependencies = [
- "dis 0.0.3",
- "mce-lib",
- "proc-macro-rules",
- "proc-macro2",
- "proc-macro2-diagnostics",
- "quote",
- "random_str",
- "syn",
-]
-
-[[package]]
 name = "proc-macro-rules"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -278,6 +264,20 @@ name = "random_str"
 version = "1.1.0"
 dependencies = [
  "rand",
+]
+
+[[package]]
+name = "restricted"
+version = "0.0.0"
+dependencies = [
+ "dis 0.0.3",
+ "mce-lib",
+ "proc-macro-rules",
+ "proc-macro2",
+ "proc-macro2-diagnostics",
+ "quote",
+ "random_str",
+ "syn",
 ]
 
 [[package]]
