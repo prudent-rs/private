@@ -14,7 +14,7 @@ use quote::quote_spanned;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::LazyLock;
-use syn::{Expr, Ident, Path, Type};
+use syn::{Expr, Ident, Type};
 
 mod file;
 
@@ -63,15 +63,15 @@ impl IdentNameConvention {
             IdentNameConvention::LowerCase | IdentNameConvention::UpperCase => {
                 if s.is_ascii() && is_last_part {
                     match self {
-                        IdentNameConvention::LowerCase => s.make_ascii_uppercase(),
-                        IdentNameConvention::UpperCase => s.make_ascii_lowercase(),
+                        IdentNameConvention::LowerCase => s.make_ascii_lowercase(),
+                        IdentNameConvention::UpperCase => s.make_ascii_uppercase(),
                         IdentNameConvention::CamelCase => unreachable!(),
                     }
                     return None;
                 } else {
                     let mut s = match self {
-                        IdentNameConvention::LowerCase => s.to_uppercase(),
-                        IdentNameConvention::UpperCase => s.to_lowercase(),
+                        IdentNameConvention::LowerCase => s.to_lowercase(),
+                        IdentNameConvention::UpperCase => s.to_uppercase(),
                         IdentNameConvention::CamelCase => unreachable!(),
                     };
                     if !is_last_part {
@@ -167,7 +167,7 @@ struct LocalFilePath {
 impl LocalFilePath {
     /// Create an instance. Convert any ASCII character sto lowercase/uppercase as indicated by
     /// `make_uppercase`.
-    pub fn new(mut local_path: PathBuf, convention: IdentNameConvention) -> Self {
+    pub fn new(local_path: PathBuf, convention: IdentNameConvention) -> Self {
         Self {
             local_path,
             convention,
@@ -286,7 +286,7 @@ impl LocalFilePath {
         // @TODO proper error
         assert!(
             i < s.len(),
-            "Source of the macro crate that uses crate 'private' is at {s}, which should not under of OUT_DIR: {OUT_DIR}"
+            "Source of the macro crate that uses crate 'restricted' is at {s}, which should not under of OUT_DIR: {OUT_DIR}"
         );
         //OwnedStringSlice::new_starting_from(s, i)
         &s[i..]
@@ -331,7 +331,7 @@ fn local_file_path(
         Ok(LocalFilePath::new(local_path, convention))
     } else {
         Err(format!(
-            "Source file path unknown for code that invokes crate `reserved`. Span: {:?}",
+            "Source file path unknown for code that invokes crate `restricted`. Span: {:?}",
             span
         )
         .to_error_at(span))
@@ -362,7 +362,6 @@ fn restricted_full_name(
     // Intentionally putting the random part at the end, to make errors/warnings more
     // obvious/searchable.
 
-    // @TODO underscore - remove in CamelCase
     let full_name = format!(
         "{ident_multi_part}{restricted_part}{ident_short_name}{underscore_if_used}{rnd_part}"
     );
@@ -502,13 +501,14 @@ impl ItemChoice {
             Self::Fn => "fn",
         }
     }
-    pub fn requires_type_and_value(&self) -> bool {
+    /*pub fn requires_type_and_value(&self) -> bool {
         self == &Self::Const || self == &Self::Static
-    }
+    }*/
 
     pub fn convention(&self) -> IdentNameConvention {
         match self {
-            Self::Const | Self::Static | Self::Fn => IdentNameConvention::LowerCase,
+            Self::Const | Self::Static => IdentNameConvention::UpperCase,
+            Self::Fn => IdentNameConvention::LowerCase,
             Self::Type => IdentNameConvention::CamelCase,
         }
     }
@@ -539,14 +539,14 @@ fn def_const_static(
         = #value
     };
     let direct_part = if direct {
-        let doc = format!("(private) {ident_short_name} {type_part}");
+        let doc = format!("(restricted) {ident_short_name} {type_part}");
         // #[doc = #doc] works to generate tooltip/mouseover with rust-analyzer:
         quote_spanned! {span=>
             #[doc = #doc]
             macro_rules! #ident_short_name {
                 // @TODO require an input/parameter ----> span check
                 ($tt:tt) => {
-                    ::private::at_direct!(#ident_short_name, #full_name, $tt)
+                    ::restricted::at_direct!(#ident_short_name, #full_name, $tt)
                     //#full_name
                 }
             }

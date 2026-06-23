@@ -1,11 +1,11 @@
-use private::*;
+use restricted::*;
 //use private::prelude::*;
 
 // #[must_use]
 fn f() {
     #![allow(unused)]
 
-    #[deprecated]
+    //#[deprecated]
     macro_rules! unused {
         () => {
             let unused = ();
@@ -34,44 +34,30 @@ fn f() {
         // ok
         allowed_unused!();
     }
-
-    def_let!(ident_here = true);
-
-    def_let! { ident_here = true }
-    let _ = at_let!(ident_here);
-
     {
-        def_let_direct!(ident_here = true);
-        let _ = at_let!(ident_here);
-        //@TODO add token(s):
-        let _ = ident_here!(.);
-    }
+        def_const!(B: bool = true);
 
-    def_let!(ident_here@::bufo::bufo:u8=0);
-    {
-        def_let_direct!(ident_here@::bufo::bufo:u8=0);
-        let _ = ident_here!(.);
-    }
+        let _ = at_const!(B);
 
-    def_let!(ident_here);
-    at_let!(ident_here) = 1;
-
-    {
-        def_let_direct!(ident_here);
-        if true {
-            at_let!(ident_here) = 1;
-        } else {
-            ident_here!(.) = 0;
+        {
+            def_const_direct!(U: u8 = 1);
+            let _ = at_const!(U);
+            //@TODO add token(s):
+            let _ = U!(.);
         }
     }
+    {
+        def_static!(B: bool = true);
 
-    def_let!(ident_here @::dufo::dufo);
-    at_let!(ident_here @::dufo::dufo) = true;
-    /* */
-    def_let!(ident_here@::bufo::bufo:bool);
-    at_let!(ident_here@::bufo::bufo) = true;
-    def_let!(ident_here@::bufo::bufo:bool);
+        let _ = at_static!(B);
 
+        {
+            def_static_direct!(U: u8 = 1);
+            let _ = at_static!(U);
+            //@TODO add token(s):
+            let _ = U!(.);
+        }
+    }
     /* */
     //bufo_bufo_private_ident_here_dimvxevsdmqmbnuhyptltyqdlnafhdbg= 0;
 }
