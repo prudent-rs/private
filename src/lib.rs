@@ -20,6 +20,11 @@ mod file;
 
 #[cfg(rust_analyzer)]
 const _TODO: () = ();
+//@TODO:
+/*
+#[cfg(rust_analyzer)]
+use no_link as _;
+*/
 
 #[cfg(not(rust_analyzer))]
 const _TODO: () = ();
@@ -519,8 +524,9 @@ fn at_direct_grammar_for_convention(
 enum ItemChoice {
     Const,
     Fn,
+    Let,
+    Mut,
     Static,
-    Trait,
     Type,
 }
 impl ItemChoice {
@@ -529,8 +535,9 @@ impl ItemChoice {
         match self {
             Self::Const => "const",
             Self::Fn => "fn",
+            Self::Let => "let",
+            Self::Mut => "let mut",
             Self::Static => "static",
-            Self::Trait => "trait",
             Self::Type => "type",
         }
     }
@@ -541,8 +548,8 @@ impl ItemChoice {
     pub fn convention(&self) -> IdentNameConvention {
         match self {
             Self::Const | Self::Static => IdentNameConvention::UpperCase,
-            Self::Fn => IdentNameConvention::LowerCase,
-            Self::Trait | Self::Type => IdentNameConvention::CamelCase,
+            Self::Fn | Self::Let | Self::Mut => IdentNameConvention::LowerCase,
+            Self::Type => IdentNameConvention::CamelCase,
         }
     }
 }

@@ -13,6 +13,8 @@ const DDI: bool = DI;
 def_const!(B: bool = true);
 def_const_direct!(U: u8 = 1);
 
+// @TODO have compile_fail test where a submodule from a different file fails
+//
 //mod sub;
 
 // #[must_use]
