@@ -360,7 +360,7 @@ fn restricted_full_name(
     // obvious/searchable.
 
     let full_name = format!(
-        "{file_multi_part}{restricted_part}{ident_short_name}{underscore_if_used}{rnd_part}"
+        "{ident_short_name}{underscore_if_used}{file_multi_part}{restricted_part}{rnd_part}"
     );
 
     Ok(Ident::new(&full_name, span))
@@ -445,12 +445,12 @@ pub fn at_direct(input: ProcTokenStream) -> ProcTokenStream {
 fn def_const_or_static_grammar(
     input: TokenStream,
     which: ItemChoice,
-    direct: bool,
+    create_direct_accessor: bool,
 ) -> MacroStreamResult {
     assert!(which == ItemChoice::Const || which == ItemChoice::Static);
     rules!(input => {
         ( $short_name:ident : $ty:ty = $value:expr ) => {
-            def_const_static(which, short_name, ty, value, direct)
+            def_const_static(which, short_name, ty, value, create_direct_accessor)
         }
     })
     .into()
@@ -488,9 +488,17 @@ fn at_grammar_item_with_varying_convention(
 
 fn at_direct_grammar(input: TokenStream) -> MacroStreamResult {
     rules!(input => {
-        ( $ident_short_name:ident, $ident_full_name:ident, $alleged_macro_provider_scope_tokens:tt, UpperCase) => {
+        ( $ident_short_name:ident, $ident_full_name:ident, $alleged_macro_provider_scope_tokens:tt, lower_case) => {
+
+            at_direct_grammar_for_convention(ident_short_name, ident_full_name, alleged_macro_provider_scope_tokens, IdentNameConvention::LowerCase)
+        }
+        ( $ident_short_name:ident, $ident_full_name:ident, $alleged_macro_provider_scope_tokens:tt, UPPER_CASE) => {
 
             at_direct_grammar_for_convention(ident_short_name, ident_full_name, alleged_macro_provider_scope_tokens, IdentNameConvention::UpperCase)
+        }
+        ( $ident_short_name:ident, $ident_full_name:ident, $alleged_macro_provider_scope_tokens:tt, CamelCase) => {
+
+            at_direct_grammar_for_convention(ident_short_name, ident_full_name, alleged_macro_provider_scope_tokens, IdentNameConvention::CamelCase)
         }
     })
 }
@@ -603,7 +611,7 @@ fn def_const_static(
 
                 ($macro_provider_scope_tokens:tt) => {
 
-                    ::restricted::at_direct!(#ident_short_name, #ident_full_name, $macro_provider_scope_tokens, UpperCase)
+                    ::restricted_enforce::at_direct!(#ident_short_name, #ident_full_name, $macro_provider_scope_tokens, UPPER_CASE)
                 }
             }
         }
