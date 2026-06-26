@@ -445,6 +445,20 @@ pub fn at_const(input: ProcTokenStream) -> ProcTokenStream {
     }
 }
 #[proc_macro]
+pub fn at_let(input: ProcTokenStream) -> ProcTokenStream {
+    match at_grammar_item_with_only_one_convention(input.into(), ItemChoice::Let) {
+        Ok(output) => output.into(),
+        Err(diag) => panic!("{:?}", diag), //diag.emit_as_expr_tokens().into(),
+    }
+}
+#[proc_macro]
+pub fn at_mut(input: ProcTokenStream) -> ProcTokenStream {
+    match at_grammar_item_with_only_one_convention(input.into(), ItemChoice::Mut) {
+        Ok(output) => output.into(),
+        Err(diag) => panic!("{:?}", diag), //diag.emit_as_expr_tokens().into(),
+    }
+}
+#[proc_macro]
 pub fn at_static(input: ProcTokenStream) -> ProcTokenStream {
     match at_grammar_item_with_only_one_convention(input.into(), ItemChoice::Static) {
         Ok(output) => output.into(),
@@ -469,7 +483,7 @@ fn def_const_or_static_grammar(
     which: ItemChoice,
     create_direct_accessor: bool,
 ) -> MacroStreamResult {
-    assert!(which == ItemChoice::Const || which == ItemChoice::Static);
+    assert!(matches!(which, ItemChoice::Const | ItemChoice::Static));
     rules!(input => {
         ( $short_name:ident : $ty:ty = $value:expr ) => {
             def_const_or_static_or_let_or_mut(which, short_name, Some(ty), Some(value), create_direct_accessor)
@@ -483,7 +497,7 @@ fn def_let_or_mut_grammar(
     which: ItemChoice,
     create_direct_accessor: bool,
 ) -> MacroStreamResult {
-    assert!(which == ItemChoice::Const || which == ItemChoice::Static);
+    assert!(matches!(which, ItemChoice::Let | ItemChoice::Mut));
     rules!(input => {
         ( $short_name:ident = $value:expr ) => {
             def_const_or_static_or_let_or_mut(which, short_name, None, Some(value), create_direct_accessor)
@@ -626,12 +640,18 @@ fn def_const_or_static_or_let_or_mut(
     value: Option<Expr>,
     create_direct_accessor: bool,
 ) -> MacroStreamResult {
-    assert!(matches!(
-        which,
-        ItemChoice::Const | ItemChoice::Let | ItemChoice::Mut | ItemChoice::Static
-    ));
+    assert!(
+        matches!(
+            which,
+            ItemChoice::Const | ItemChoice::Let | ItemChoice::Mut | ItemChoice::Static
+        ),
+        "Given item choice {which:?} is not one acceptable."
+    );
 
-    assert!(!which.requires_type_and_value() || ty.is_some() && value.is_some());
+    assert!(
+        !which.requires_type_and_value() || ty.is_some() && value.is_some(),
+        "Given item choice {which:?} requires both the type and the value."
+    );
 
     let convention = which.convention().unwrap();
     let ident_full_name = restricted_full_name(&ident_short_name, convention)?;
@@ -658,15 +678,10 @@ fn def_const_or_static_or_let_or_mut(
         TokenStream::new()
     };
 
-    let doc = format!(
-        "(restricted) {} {ident_short_name}",
-        match which {
-            ItemChoice::Const => "const",
-            ItemChoice::Static => "static",
-            _ => unreachable!(),
-        }
-    );
+    let doc = format!("(restricted) {} {ident_short_name}", which.keywords());
+
     let convention_token = convention.macro_input_token(span);
+
     let direct_part = if create_direct_accessor {
         // #[doc = #doc] works to generate tooltip/mouseover with rust-analyzer:
         quote_spanned! {span=>
