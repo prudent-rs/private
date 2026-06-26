@@ -483,11 +483,21 @@ pub fn at_static(input: ProcTokenStream) -> ProcTokenStream {
 }
 // --------------
 
-/// Internal - not for direct use.
+/// Internal - not for direct use. For `const`, `let`, `let mut` and `static` only.
 #[proc_macro]
 #[doc(hidden)]
 pub fn at_direct(input: ProcTokenStream) -> ProcTokenStream {
     match at_direct_grammar(input.into()) {
+        Ok(output) => output.into(),
+        Err(diag) => panic!("{:?}", diag), //diag.emit_as_expr_tokens().into(),
+    }
+}
+
+/// Internal - not for direct use. For `use` only.
+#[proc_macro]
+#[doc(hidden)]
+pub fn use_direct(input: ProcTokenStream) -> ProcTokenStream {
+    match use_direct_grammar(input.into()) {
         Ok(output) => output.into(),
         Err(diag) => panic!("{:?}", diag), //diag.emit_as_expr_tokens().into(),
     }
@@ -542,21 +552,21 @@ fn def_use_grammar(input: TokenStream, create_direct_accessor: bool) -> MacroStr
           // @TODO other param: attribute(s)?
           $( $items: tt )*
         ) => {
-            def_use_impl(ident_short_name, items, IdentNameConvention::CamelCase)
+            def_use_impl(ident_short_name, items, IdentNameConvention::CamelCase, create_direct_accessor)
         }
         ( $ident_short_name: ident,
           lower_case,
           // @TODO other param: attribute(s)?
           $( $items: tt )*
         ) => {
-            def_use_impl(ident_short_name, items, IdentNameConvention::LowerCase)
+            def_use_impl(ident_short_name, items, IdentNameConvention::LowerCase, create_direct_accessor)
         }
         ( $ident_short_name: ident,
           UPPER_CASE,
           // @TODO other param: attribute(s)?
           $( $items: tt )*
         ) => {
-            def_use_impl(ident_short_name, items, IdentNameConvention::UpperCase)
+            def_use_impl(ident_short_name, items, IdentNameConvention::UpperCase, create_direct_accessor)
         }
     })
     .into()
@@ -605,6 +615,45 @@ fn at_direct_grammar(input: TokenStream) -> MacroStreamResult {
         }
     })
 }
+
+/// Verify that access to `ident_short_name` as `alleged_ident_full_name` is compatible/allowed from
+/// scope of `alleged_macro_provider_scope_tokens`.
+fn verify_alleged_access(
+    ident_short_name: &Ident,
+    alleged_ident_full_name: &Ident,
+    alleged_macro_provider_scope_tokens: &TokenTree,
+    name_convention: IdentNameConvention,
+) -> MacroDiagnosticResult<()> {
+    let ident_full_name_based_on_actual_macro_provider_span =
+        restricted_full_name(&ident_short_name, name_convention)?;
+
+    if &ident_full_name_based_on_actual_macro_provider_span != alleged_ident_full_name {
+        let alleged_macro_provider_span = alleged_macro_provider_scope_tokens.span();
+        return Err(format!(
+            "Identifier {ident_short_name} is not accessible in the given span \
+                        {alleged_macro_provider_span:?}."
+        )
+        .dis_to_error_at(alleged_macro_provider_span));
+    }
+    Ok(())
+}
+
+fn use_direct_grammar(input: TokenStream) -> MacroStreamResult {
+    rules!(input => {
+        ( $ident_short_name:ident, $ident_full_name:ident, $alleged_macro_provider_scope_tokens:tt, lower_case) => {
+
+            use_direct_grammar_for_convention(ident_short_name, ident_full_name, alleged_macro_provider_scope_tokens, IdentNameConvention::LowerCase)
+        }
+        ( $ident_short_name:ident, $ident_full_name:ident, $alleged_macro_provider_scope_tokens:tt, UPPER_CASE) => {
+
+            use_direct_grammar_for_convention(ident_short_name, ident_full_name, alleged_macro_provider_scope_tokens, IdentNameConvention::UpperCase)
+        }
+        ( $ident_short_name:ident, $ident_full_name:ident, $alleged_macro_provider_scope_tokens:tt, CamelCase) => {
+
+            use_direct_grammar_for_convention(ident_short_name, ident_full_name, alleged_macro_provider_scope_tokens, IdentNameConvention::CamelCase)
+        }
+    })
+}
 //----------
 
 fn at_direct_grammar_for_convention(
@@ -615,25 +664,39 @@ fn at_direct_grammar_for_convention(
 ) -> MacroStreamResult {
     let alleged_macro_provider_span = alleged_macro_provider_scope_tokens.span();
 
-    // verify that full_name is compatible with tt.span = that tt.span is acceptable
-    {
-        let ident_full_name_based_on_actual_macro_provider_span =
-            restricted_full_name(&ident_short_name, name_convention)?;
-
-        if ident_full_name_based_on_actual_macro_provider_span != alleged_ident_full_name {
-            let alleged_macro_provider_span = alleged_macro_provider_scope_tokens.span();
-            return Err(format!(
-                "Identifier {ident_short_name} is not accessible in the given span \
-                         {alleged_macro_provider_span:?}."
-            )
-            .dis_to_error_at(alleged_macro_provider_span));
-        }
-    }
+    verify_alleged_access(
+        &ident_short_name,
+        &alleged_ident_full_name,
+        &alleged_macro_provider_scope_tokens,
+        name_convention,
+    )?;
 
     Ok(quote_spanned! {alleged_macro_provider_span=>
         #alleged_ident_full_name
     })
 }
+
+fn use_direct_grammar_for_convention(
+    ident_short_name: Ident,
+    alleged_ident_full_name: Ident,
+    alleged_macro_provider_scope_tokens: TokenTree,
+    name_convention: IdentNameConvention,
+) -> MacroStreamResult {
+    let alleged_macro_provider_span = alleged_macro_provider_scope_tokens.span();
+
+    verify_alleged_access(
+        &ident_short_name,
+        &alleged_ident_full_name,
+        &alleged_macro_provider_scope_tokens,
+        name_convention,
+    )?;
+
+    let outer_mod = use_outer_mod(&ident_short_name);
+    Ok(quote_spanned! {alleged_macro_provider_span=>
+        #outer_mod::#alleged_ident_full_name
+    })
+}
+//----------
 
 /// Access choice for a var/value. For now (and hopefully forever) we ignore `static mut`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -725,7 +788,6 @@ fn def_const_or_static_or_let_or_mut(
     let doc = format!("(restricted) {} {ident_short_name}", which.keywords());
 
     let convention_token = name_convention.macro_input_token(span);
-
     let direct_part = if create_direct_accessor {
         // #[doc = #doc] works to generate tooltip/mouseover with rust-analyzer:
         quote_spanned! {span=>
@@ -752,39 +814,69 @@ fn def_const_or_static_or_let_or_mut(
     })
 }
 
+fn use_outer_mod(ident_short_name: &Ident) -> Ident {
+    let span = ident_short_name.span();
+    // Based on
+    // https://github.com/search?q=%2F%5B%5Ea-zA-Z_%5Dmod+%2Brestricted_outer_%5Ba-zA-Z_0-9%5D%2B%2F+language%3ARust&type=code
+    // (which is GitHub search for `/[^a-zA-Z_]mod +restricted_outer_[a-zA-Z_0-9]+/ language:Rust`)
+    // there is no Rust module with name starting with `restricted_outer_`.
+    Ident::new(
+        &format!(
+            "restricted_outer_{}",
+            IdentNameConvention::LowerCase.apply(ident_short_name.to_string(), true)
+        ),
+        span,
+    )
+}
+
 fn def_use_impl(
     ident_short_name: Ident,
     items: Vec<TokenTree>,
     name_convention: IdentNameConvention,
+    create_direct_accessor: bool,
 ) -> MacroStreamResult {
     let ident_full_name = restricted_full_name(&ident_short_name, name_convention)?;
 
     let span = ident_short_name.span();
-    Ok(
-        // Based on
-        // https://github.com/search?q=%2F%5B%5Ea-zA-Z_%5Dmod+%2Brestricted_outer_%5Ba-zA-Z_0-9%5D%2B%2F+language%3ARust&type=code,
-        // which is GitHub search for `/[^a-zA-Z_]mod +restricted_outer_[a-zA-Z_0-9]+/
-        // language:Rust`, there is no Rust module with name starting with `restricted_outer_`.
-        //let outer_mod = Ident::new(format!());
+    let outer_mod = use_outer_mod(&ident_short_name);
 
+    let doc = format!("(restricted) {ident_short_name}");
+
+    let convention_token = name_convention.macro_input_token(span);
+    let direct_part = if create_direct_accessor {
+        // #[doc = #doc] works to generate tooltip/mouseover with rust-analyzer:
         quote_spanned! {span=>
-            mod $module_name {
-                mod restricted_inner {
-                    // This will need:
-                    use super::super::*;
 
-                    $( $definition )*
-                }
-                pub(crate) use restricted_inner::$short_name as random_name;
-            }
-            macro_rules! $short_name {
-                // @TODO take input: token tree to check the Span
-                ($token_carrier: tt) => {
-                    $module_name::random_name
-                };
+            #[doc = #doc]
+            #[doc(hidden)]
+            macro_rules! #ident_short_name {
+
+                ($macro_provider_scope_tokens:tt) => {
+
+                    ::restricted_enforce::use_direct!(#ident_short_name, #ident_full_name, $macro_provider_scope_tokens, #convention_token)
+                                }
             }
         }
-    )
+    } else {
+        TokenStream::new()
+    };
+
+    // https://github.com/search?q=%2F%5B%5Ea-zA-Z_%5Dmod+%2Brestricted_inner%2F+language%3ARust&type=code
+    // (which is GitHub search for `/[^a-zA-Z_]mod +restricted_inner/ language:Rust`) returns no
+    // matches.
+    Ok(quote_spanned! {span=>
+        mod #outer_mod {
+            mod restricted_inner {
+                // This will need:
+                use super::super::*;
+
+                #( #items )*
+            }
+            pub(crate) use restricted_inner::#ident_short_name as #ident_full_name;
+        }
+
+        #direct_part
+    })
 }
 
 fn at_impl(ident_short_name: &Ident, name_convention: IdentNameConvention) -> MacroStreamResult {
