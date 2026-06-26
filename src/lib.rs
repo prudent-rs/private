@@ -398,14 +398,14 @@ pub fn def_static_direct(input: ProcTokenStream) -> ProcTokenStream {
 
 #[proc_macro]
 pub fn at_const(input: ProcTokenStream) -> ProcTokenStream {
-    match at_grammar(input.into(), ItemChoice::Const) {
+    match at_grammar_item_with_only_one_convention(input.into(), ItemChoice::Const) {
         Ok(output) => output.into(),
         Err(diag) => panic!("{:?}", diag), //diag.emit_as_expr_tokens().into(),
     }
 }
 #[proc_macro]
 pub fn at_static(input: ProcTokenStream) -> ProcTokenStream {
-    match at_grammar(input.into(), ItemChoice::Static) {
+    match at_grammar_item_with_only_one_convention(input.into(), ItemChoice::Static) {
         Ok(output) => output.into(),
         Err(diag) => panic!("{:?}", diag), //diag.emit_as_expr_tokens().into(),
     }
@@ -449,7 +449,7 @@ fn def_const_or_static_grammar(
 ) -> MacroStreamResult {
     assert!(which == ItemChoice::Const || which == ItemChoice::Static);
     rules!(input => {
-        ( $short_name:ident:$ty:ty = $value:expr ) => {
+        ( $short_name:ident : $ty:ty = $value:expr ) => {
             def_const_static(which, short_name, ty, value, direct)
         }
     })
@@ -458,14 +458,33 @@ fn def_const_or_static_grammar(
 /*macro_rules! _path_then_colon {
     ($path:path)
 }*/
+//----------
+//----------
 
-fn at_grammar(input: TokenStream, which: ItemChoice) -> MacroStreamResult {
+fn at_grammar_item_with_only_one_convention(
+    input: TokenStream,
+    which: ItemChoice,
+) -> MacroStreamResult {
     rules!(input => {
         ( $short_name:ident) => {
-            at_impl(&short_name, which.convention())
+            at_impl(&short_name, which.convention().unwrap())
         }
     })
 }
+
+fn at_grammar_item_with_varying_convention(
+    input: TokenStream,
+    which: ItemChoice,
+    convention: IdentNameConvention,
+) -> MacroStreamResult {
+    assert!(which.convention().is_none());
+    rules!(input => {
+        ( $short_name:ident) => {
+            at_impl(&short_name, convention)
+        }
+    })
+}
+//----------
 
 fn at_direct_grammar(input: TokenStream) -> MacroStreamResult {
     rules!(input => {
@@ -475,6 +494,8 @@ fn at_direct_grammar(input: TokenStream) -> MacroStreamResult {
         }
     })
 }
+//----------
+
 fn at_direct_grammar_for_convention(
     ident_short_name: Ident,
     alleged_ident_full_name: Ident,
@@ -506,34 +527,34 @@ fn at_direct_grammar_for_convention(
 /// Access choice for a var/value. For now (and hopefully forever) we ignore `static mut`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ItemChoice {
-    Const,
-    Fn,
+    Const, // this covers "fn", because a function can be assigned to a constant
     Let,
     Mut,
     Static,
-    Type,
+    Use,
 }
 impl ItemChoice {
     /// One of: `const`, `fn`, `static`, `trait`, `type`.
     pub fn keywords(&self) -> &'static str {
         match self {
             Self::Const => "const",
-            Self::Fn => "fn",
             Self::Let => "let",
             Self::Mut => "let mut",
             Self::Static => "static",
-            Self::Type => "type",
+            Self::Use => "pub(crate) use",
         }
     }
     /*pub fn requires_type_and_value(&self) -> bool {
         self == &Self::Const || self == &Self::Static
     }*/
 
-    pub fn convention(&self) -> IdentNameConvention {
+    /// Returning [Some] means to use that [IdentNameConvention]. But, returning [None] means that
+    /// the [IdentNameConvention] depends on how this [ItemChoice] is used.
+    pub fn convention(&self) -> Option<IdentNameConvention> {
         match self {
-            Self::Const | Self::Static => IdentNameConvention::UpperCase,
-            Self::Fn | Self::Let | Self::Mut => IdentNameConvention::LowerCase,
-            Self::Type => IdentNameConvention::CamelCase,
+            Self::Const | Self::Static => Some(IdentNameConvention::UpperCase),
+            Self::Let | Self::Mut => Some(IdentNameConvention::LowerCase),
+            Self::Use => None,
         }
     }
 }
@@ -548,7 +569,7 @@ fn def_const_static(
 ) -> MacroStreamResult {
     assert!(matches!(which, ItemChoice::Const | ItemChoice::Static));
 
-    let ident_full_name = restricted_full_name(&ident_short_name, which.convention())?;
+    let ident_full_name = restricted_full_name(&ident_short_name, which.convention().unwrap())?;
 
     let span = ident_short_name.span();
 
