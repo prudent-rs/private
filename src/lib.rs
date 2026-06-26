@@ -95,7 +95,7 @@ impl IdentNameConvention {
         }
     }
 
-    /// Token that indicates this convention, as expected by [at_direct].
+    /// Token that indicates this name_convention, as expected by [at_direct].
     fn macro_input_token(&self, span: Span) -> Ident {
         let ident = match *self {
             Self::LowerCase => "lower_case",
@@ -118,8 +118,8 @@ static OUT_DIR_CAMEL_CASE: LazyLock<String> = LazyLock::new(|| {
     let s = OUT_DIR.to_owned();
     IdentNameConvention::CamelCase.apply(s, false)
 });
-fn out_dir(convention: IdentNameConvention) -> &'static str {
-    match convention {
+fn out_dir(name_convention: IdentNameConvention) -> &'static str {
+    match name_convention {
         IdentNameConvention::LowerCase => &*OUT_DIR_LOWER_CASE,
         IdentNameConvention::UpperCase => &*OUT_DIR_UPPER_CASE,
         IdentNameConvention::CamelCase => &*OUT_DIR_CAMEL_CASE,
@@ -140,24 +140,24 @@ static RND_PART_CAMEL_CASE: LazyLock<String> = LazyLock::new(|| {
     let s = (*RND_PART_LOWER_CASE).clone();
     IdentNameConvention::CamelCase.apply(s, true)
 });
-fn rnd_part(convention: IdentNameConvention) -> &'static str {
-    match convention {
+fn rnd_part(name_convention: IdentNameConvention) -> &'static str {
+    match name_convention {
         IdentNameConvention::LowerCase => &*RND_PART_LOWER_CASE,
         IdentNameConvention::UpperCase => &*RND_PART_UPPER_CASE,
         IdentNameConvention::CamelCase => &*RND_PART_CAMEL_CASE,
     }
 }
 
-fn restricted_part(convention: IdentNameConvention) -> &'static str {
-    match convention {
+fn restricted_part(name_convention: IdentNameConvention) -> &'static str {
+    match name_convention {
         IdentNameConvention::LowerCase => "restricted_",
         IdentNameConvention::UpperCase => "RESTRICTED_",
         IdentNameConvention::CamelCase => "Restricted",
     }
 }
 
-fn underscore_if_used(convention: IdentNameConvention) -> &'static str {
-    if convention.uses_underscore() {
+fn underscore_if_used(name_convention: IdentNameConvention) -> &'static str {
+    if name_convention.uses_underscore() {
         "_"
     } else {
         ""
@@ -166,15 +166,15 @@ fn underscore_if_used(convention: IdentNameConvention) -> &'static str {
 
 struct LocalFilePath {
     local_path: PathBuf,
-    convention: IdentNameConvention,
+    name_convention: IdentNameConvention,
 }
 impl LocalFilePath {
     /// Create an instance. Convert any ASCII character sto lowercase/uppercase as indicated by
     /// `make_uppercase`.
-    pub fn new(local_path: PathBuf, convention: IdentNameConvention) -> Self {
+    pub fn new(local_path: PathBuf, name_convention: IdentNameConvention) -> Self {
         Self {
             local_path,
-            convention,
+            name_convention,
         }
     }
 }
@@ -188,7 +188,7 @@ impl LocalFilePath {
     /// Get subpath, excluding any part shared with [OUT_DIR], and sanitize to be
     /// [Ident]-compatible.
     ///
-    /// Do _not_ use for a last part of an identifier, because if [LocalFilePath::convention] part
+    /// Do _not_ use for a last part of an identifier, because if [LocalFilePath::name_convention] part
     /// of `self` has [IdentNameConvention::uses_underscore] `true`, then this appends an underscore
     /// (which would then become a trailing underscore).
     ///
@@ -204,7 +204,7 @@ impl LocalFilePath {
                 owned_s = None;
                 s
             } else {
-                owned_s = Some(if self.convention {
+                owned_s = Some(if self.name_convention {
                     s.to_uppercase()
                 } else {
                     s.to_lowercase()
@@ -212,14 +212,14 @@ impl LocalFilePath {
                 owned_s.as_ref().unwrap()
             };
 
-            let out_dir = if self.convention {
+            let out_dir = if self.name_convention {
                 &(*OUT_DIR_UPPER_CASE)[..]
             } else {
                 &(*OUT_DIR_LOWER_CASE)[..]
             };
             */
 
-            let out_dir = out_dir(self.convention);
+            let out_dir = out_dir(self.name_convention);
 
             let out_dir_chars_opt = out_dir
                 .chars()
@@ -257,7 +257,7 @@ impl LocalFilePath {
                             part.push(p);
                         } else {
                             if part.len() > 0 {
-                                part = self.convention.apply(part, false);
+                                part = self.name_convention.apply(part, false);
                                 joined_parts.extend(part.chars());
                                 part.clear();
                             }
@@ -265,7 +265,7 @@ impl LocalFilePath {
                     }
                 }
                 if part.len() > 0 {
-                    let part = self.convention.apply(part, false);
+                    let part = self.name_convention.apply(part, false);
                     joined_parts.extend(part.chars());
                 }
             }
@@ -329,10 +329,10 @@ impl LocalFilePath {
 
 fn local_file_path(
     span: Span,
-    convention: IdentNameConvention,
+    name_convention: IdentNameConvention,
 ) -> MacroDiagnosticResult<LocalFilePath> {
     if let Some(local_path) = span.local_file() {
-        Ok(LocalFilePath::new(local_path, convention))
+        Ok(LocalFilePath::new(local_path, name_convention))
     } else {
         Err(format!(
             "Source file path unknown for code that invokes crate `restricted`. Span: {:?}",
@@ -343,28 +343,28 @@ fn local_file_path(
 }
 
 /// Generate a full name. We do _not_ modify the part based on `ident_given_name` - so
-/// `ident_given_name` already has to follow `convention`. However, we exclude any leading or
+/// `ident_given_name` already has to follow `name_convention`. However, we exclude any leading or
 /// trailing underscores from `ident_given_name` - we do insert an underscore on each side of
-/// `ident_given_name` if `convention` uses it.
+/// `ident_given_name` if `name_convention` uses it.
 ///
 /// Compatible with Rust non-ASCII identifiers
 /// (https://rust-lang.github.io/rfcs/2457-non-ascii-idents.html).
 fn restricted_full_name(
     ident_short_name: &Ident,
-    convention: IdentNameConvention,
+    name_convention: IdentNameConvention,
     //@TODO prefix_with_underscore: bool
 ) -> MacroDiagnosticResult<Ident> {
     let span = ident_short_name.span();
 
-    let file_path = local_file_path(span, convention)?;
+    let file_path = local_file_path(span, name_convention)?;
     let file_multi_part = file_path
         .sanitize_as_ident_multi_part()
         .dis_span_err(span)?;
 
-    let restricted_part = restricted_part(convention);
+    let restricted_part = restricted_part(name_convention);
 
-    let underscore_if_used = underscore_if_used(convention);
-    let rnd_part = rnd_part(convention);
+    let underscore_if_used = underscore_if_used(name_convention);
+    let rnd_part = rnd_part(name_convention);
 
     // Intentionally putting the random part at the end, to make errors/warnings more
     // obvious/searchable.
@@ -431,6 +431,22 @@ pub fn def_mut(input: ProcTokenStream) -> ProcTokenStream {
 #[proc_macro]
 pub fn def_mut_direct(input: ProcTokenStream) -> ProcTokenStream {
     match def_let_or_mut_grammar(input.into(), ItemChoice::Mut, true) {
+        Ok(output) => output.into(),
+        Err(diag) => panic!("{:?}", diag), //diag.emit_as_expr_tokens().into(),
+    }
+}
+// --------------
+
+#[proc_macro]
+pub fn def_use(input: ProcTokenStream) -> ProcTokenStream {
+    match def_use_grammar(input.into(), false) {
+        Ok(output) => output.into(),
+        Err(diag) => panic!("{:?}", diag), //diag.emit_as_expr_tokens().into(),
+    }
+}
+#[proc_macro]
+pub fn def_use_direct(input: ProcTokenStream) -> ProcTokenStream {
+    match def_use_grammar(input.into(), true) {
         Ok(output) => output.into(),
         Err(diag) => panic!("{:?}", diag), //diag.emit_as_expr_tokens().into(),
     }
@@ -518,6 +534,34 @@ fn def_let_or_mut_grammar(
     ($path:path)
 }*/
 //----------
+
+fn def_use_grammar(input: TokenStream, create_direct_accessor: bool) -> MacroStreamResult {
+    rules!(input => {
+        ( $ident_short_name: ident,
+          CamelCase,
+          // @TODO other param: attribute(s)?
+          $( $items: tt )*
+        ) => {
+            def_use_impl(ident_short_name, items, IdentNameConvention::CamelCase)
+        }
+        ( $ident_short_name: ident,
+          lower_case,
+          // @TODO other param: attribute(s)?
+          $( $items: tt )*
+        ) => {
+            def_use_impl(ident_short_name, items, IdentNameConvention::LowerCase)
+        }
+        ( $ident_short_name: ident,
+          UPPER_CASE,
+          // @TODO other param: attribute(s)?
+          $( $items: tt )*
+        ) => {
+            def_use_impl(ident_short_name, items, IdentNameConvention::UpperCase)
+        }
+    })
+    .into()
+}
+//----------
 //----------
 
 fn at_grammar_item_with_only_one_convention(
@@ -526,7 +570,7 @@ fn at_grammar_item_with_only_one_convention(
 ) -> MacroStreamResult {
     rules!(input => {
         ( $short_name:ident) => {
-            at_impl(&short_name, which.convention().unwrap())
+            at_impl(&short_name, which.name_convention().unwrap())
         }
     })
 }
@@ -534,12 +578,12 @@ fn at_grammar_item_with_only_one_convention(
 fn at_grammar_item_with_varying_convention(
     input: TokenStream,
     which: ItemChoice,
-    convention: IdentNameConvention,
+    name_convention: IdentNameConvention,
 ) -> MacroStreamResult {
-    assert!(which.convention().is_none());
+    assert!(which.name_convention().is_none());
     rules!(input => {
         ( $short_name:ident) => {
-            at_impl(&short_name, convention)
+            at_impl(&short_name, name_convention)
         }
     })
 }
@@ -567,14 +611,14 @@ fn at_direct_grammar_for_convention(
     ident_short_name: Ident,
     alleged_ident_full_name: Ident,
     alleged_macro_provider_scope_tokens: TokenTree,
-    convention: IdentNameConvention,
+    name_convention: IdentNameConvention,
 ) -> MacroStreamResult {
     let alleged_macro_provider_span = alleged_macro_provider_scope_tokens.span();
 
     // verify that full_name is compatible with tt.span = that tt.span is acceptable
     {
         let ident_full_name_based_on_actual_macro_provider_span =
-            restricted_full_name(&ident_short_name, convention)?;
+            restricted_full_name(&ident_short_name, name_convention)?;
 
         if ident_full_name_based_on_actual_macro_provider_span != alleged_ident_full_name {
             let alleged_macro_provider_span = alleged_macro_provider_scope_tokens.span();
@@ -624,7 +668,7 @@ impl ItemChoice {
 
     /// Returning [Some] means to use that [IdentNameConvention]. But, returning [None] means that
     /// the [IdentNameConvention] depends on how this [ItemChoice] is used.
-    pub fn convention(&self) -> Option<IdentNameConvention> {
+    pub fn name_convention(&self) -> Option<IdentNameConvention> {
         match self {
             Self::Const | Self::Static => Some(IdentNameConvention::UpperCase),
             Self::Let | Self::Mut => Some(IdentNameConvention::LowerCase),
@@ -653,8 +697,8 @@ fn def_const_or_static_or_let_or_mut(
         "Given item choice {which:?} requires both the type and the value."
     );
 
-    let convention = which.convention().unwrap();
-    let ident_full_name = restricted_full_name(&ident_short_name, convention)?;
+    let name_convention = which.name_convention().unwrap();
+    let ident_full_name = restricted_full_name(&ident_short_name, name_convention)?;
 
     let span = ident_short_name.span();
 
@@ -680,7 +724,7 @@ fn def_const_or_static_or_let_or_mut(
 
     let doc = format!("(restricted) {} {ident_short_name}", which.keywords());
 
-    let convention_token = convention.macro_input_token(span);
+    let convention_token = name_convention.macro_input_token(span);
 
     let direct_part = if create_direct_accessor {
         // #[doc = #doc] works to generate tooltip/mouseover with rust-analyzer:
@@ -708,8 +752,43 @@ fn def_const_or_static_or_let_or_mut(
     })
 }
 
-fn at_impl(ident_short_name: &Ident, convention: IdentNameConvention) -> MacroStreamResult {
-    let full_name = restricted_full_name(ident_short_name, convention)?;
+fn def_use_impl(
+    ident_short_name: Ident,
+    items: Vec<TokenTree>,
+    name_convention: IdentNameConvention,
+) -> MacroStreamResult {
+    let ident_full_name = restricted_full_name(&ident_short_name, name_convention)?;
+
+    let span = ident_short_name.span();
+    Ok(
+        // Based on
+        // https://github.com/search?q=%2F%5B%5Ea-zA-Z_%5Dmod+%2Brestricted_outer_%5Ba-zA-Z_0-9%5D%2B%2F+language%3ARust&type=code,
+        // which is GitHub search for `/[^a-zA-Z_]mod +restricted_outer_[a-zA-Z_0-9]+/
+        // language:Rust`, there is no Rust module with name starting with `restricted_outer_`.
+        //let outer_mod = Ident::new(format!());
+
+        quote_spanned! {span=>
+            mod $module_name {
+                mod restricted_inner {
+                    // This will need:
+                    use super::super::*;
+
+                    $( $definition )*
+                }
+                pub(crate) use restricted_inner::$short_name as random_name;
+            }
+            macro_rules! $short_name {
+                // @TODO take input: token tree to check the Span
+                ($token_carrier: tt) => {
+                    $module_name::random_name
+                };
+            }
+        }
+    )
+}
+
+fn at_impl(ident_short_name: &Ident, name_convention: IdentNameConvention) -> MacroStreamResult {
+    let full_name = restricted_full_name(ident_short_name, name_convention)?;
     let span = ident_short_name.span();
     Ok(quote_spanned! {span=>
         #full_name
