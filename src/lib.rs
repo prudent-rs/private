@@ -478,29 +478,43 @@ fn def_let_or_mut_grammar(
     ($path:path)
 }*/
 //----------
+//----------
+
+fn detect_convention(ident_short_name: &Ident) -> MacroDiagnosticResult<IdentNameConvention> {
+    IdentNameConvention::try_from(&ident_short_name.to_string()[..])
+        .dis_map_err_to_at(ident_short_name.span())
+}
 
 fn def_use_grammar(input: TokenStream, create_direct_accessor: bool) -> MacroStreamResult {
     rules!(input => {
         ( $ident_short_name: ident,
-          CamelCase,
+          CamelCase;
           // @TODO other param: attribute(s)?
           $( $items: tt )*
         ) => {
             def_use_impl(ident_short_name, items, IdentNameConvention::CamelCase, create_direct_accessor)
         }
         ( $ident_short_name: ident,
-          lower_case,
+          lower_case;
           // @TODO other param: attribute(s)?
           $( $items: tt )*
         ) => {
             def_use_impl(ident_short_name, items, IdentNameConvention::LowerCase, create_direct_accessor)
         }
         ( $ident_short_name: ident,
-          UPPER_CASE,
+          UPPER_CASE;
           // @TODO other param: attribute(s)?
           $( $items: tt )*
         ) => {
             def_use_impl(ident_short_name, items, IdentNameConvention::UpperCase, create_direct_accessor)
+        }
+        // Detect name convention:
+        ( $ident_short_name: ident;
+          // @TODO other param: attribute(s)?
+          $( $items: tt )*
+        ) => {
+            let convention = detect_convention(&ident_short_name)?;
+            def_use_impl(ident_short_name, items, convention, create_direct_accessor)
         }
     })
     .into()
@@ -533,25 +547,36 @@ fn at_use_grammar(input: TokenStream) -> MacroStreamResult {
 
             at_use_impl(&ident_short_name, IdentNameConvention::LowerCase)
         }
+        ( $ident_short_name:ident) => {
+            let convention = detect_convention(&ident_short_name)?;
+
+            at_use_impl(&ident_short_name, convention)
+        }
     })
 }
 
 fn use_with_grammar(input: TokenStream) -> MacroStreamResult {
     rules!(input => {
-        ( $ident_short_name:ident, CamelCase, $accessor_module:ident, $( $items: tt )*
+        ( $ident_short_name:ident, CamelCase; $accessor_module:ident, $( $items: tt )*
         ) => {
 
             use_with_impl(&ident_short_name, IdentNameConvention::CamelCase, &accessor_module, items)
         }
-        ( $ident_short_name:ident, UPPER_CASE, $accessor_module:ident, $( $items: tt )*
+        ( $ident_short_name:ident, UPPER_CASE; $accessor_module:ident, $( $items: tt )*
         ) => {
 
             use_with_impl(&ident_short_name, IdentNameConvention::UpperCase, &accessor_module, items)
         }
-        ( $ident_short_name:ident, lower_case, $accessor_module:ident, $( $items: tt )*
+        ( $ident_short_name:ident, lower_case; $accessor_module:ident, $( $items: tt )*
         ) => {
 
             use_with_impl(&ident_short_name, IdentNameConvention::LowerCase, &accessor_module, items)
+        }
+        ( $ident_short_name:ident; $accessor_module:ident, $( $items: tt )*
+        ) => {
+            let convention = detect_convention(&ident_short_name)?;
+
+            use_with_impl(&ident_short_name, convention, &accessor_module, items)
         }
     })
 }
@@ -570,6 +595,11 @@ fn at_direct_grammar(input: TokenStream) -> MacroStreamResult {
         ( $ident_short_name:ident, $ident_full_name:ident, $alleged_macro_provider_scope_tokens:tt, CamelCase) => {
 
             at_direct_grammar_for_convention(ident_short_name, ident_full_name, alleged_macro_provider_scope_tokens, IdentNameConvention::CamelCase)
+        }
+        ( $ident_short_name:ident, $ident_full_name:ident, $alleged_macro_provider_scope_tokens:tt) => {
+            let convention = detect_convention(&ident_short_name)?;
+
+            at_direct_grammar_for_convention(ident_short_name, ident_full_name, alleged_macro_provider_scope_tokens, convention)
         }
     })
 }
@@ -609,6 +639,11 @@ fn use_direct_grammar(input: TokenStream) -> MacroStreamResult {
         ( $ident_short_name:ident, $ident_full_name:ident, $alleged_macro_provider_scope_tokens:tt, CamelCase) => {
 
             use_direct_grammar_for_convention(ident_short_name, ident_full_name, alleged_macro_provider_scope_tokens, IdentNameConvention::CamelCase)
+        }
+        ( $ident_short_name:ident, $ident_full_name:ident, $alleged_macro_provider_scope_tokens:tt) => {
+            let convention = detect_convention(&ident_short_name)?;
+
+            use_direct_grammar_for_convention(ident_short_name, ident_full_name, alleged_macro_provider_scope_tokens, convention)
         }
     })
 }
