@@ -110,53 +110,75 @@ impl TryFrom<&str> for IdentNameConvention {
     type Error = String;
 
     fn try_from(id: &str) -> Result<Self, Self::Error> {
-        // 0-based indexes to three bools, one per: CamelCase, LowerCase, UpperCase
-        const CAMEL: usize = 0;
-        const LOWER: usize = 1;
-        const UPPER: usize = 2;
-        let mut can_be = [true, true, true];
+        let mut flags = [false, false, false, false];
+        // 0-based indexes to bools in flags[]:
+        const HAS_INNER_UNDERSCORE: usize = 0;
+        const HAS_LOWER: usize = 1;
+        const HAS_UPPER: usize = 2;
+        // _not_ conclusive/exhaustive - even if CANNOT_BE_CAMEL==false, id still may _not_ be in
+        // CamelCase.
+        const CANNOT_BE_CAMEL: usize = 3;
 
-        let how_many_true =
-            |can_be: &[bool]| -> usize { can_be.iter().map(|b| if *b { 1 } else { 0 }).sum() };
+        //let how_many_true = |can_be: &[bool]| -> usize { can_be.iter().map(|b| if *b { 1 } else { 0 }).sum() };
 
-        let mut first_char = true;
-        let mut first_letter = true;
+        let mut expecting_first_letter = true;
         for c in id.chars() {
             if c == '_' {
-                if !first_char {
-                    // We don't specially cater for ID starting with __
-                    can_be[CAMEL] = false;
+                // Ignoring leadins _ __ ___ etc.
+                if !expecting_first_letter {
+                    // Treating _ __ ___ etc. as an inner underscore
+                    flags[HAS_INNER_UNDERSCORE] = true;
                 }
-                first_char = false;
                 continue;
             }
             if c.is_alphabetic() {
                 if c.is_lowercase() && !c.is_uppercase() {
-                    if first_letter {
-                        can_be[CAMEL] = false;
+                    if expecting_first_letter {
+                        flags[CANNOT_BE_CAMEL] = true;
                     }
-                    can_be[UPPER] = false;
+                    flags[HAS_LOWER] = true;
                 } else if c.is_uppercase() && !c.is_lowercase() {
-                    can_be[LOWER] = false;
+                    flags[HAS_UPPER] = true;
                 }
-                first_letter = false;
+                expecting_first_letter = false;
             }
         }
-        if how_many_true(&can_be) == 1 {
-            Ok(if can_be[CAMEL] {
-                assert!(!can_be[LOWER] && !can_be[UPPER]);
-                IdentNameConvention::CamelCase
-            } else if can_be[LOWER] {
-                assert!(!can_be[CAMEL] && !can_be[UPPER]);
-                IdentNameConvention::LowerCase
-            } else if can_be[UPPER] {
-                assert!(!can_be[CAMEL] && !can_be[LOWER]);
-                IdentNameConvention::UpperCase
-            } else {
-                unreachable!()
-            })
-        } else {
-            Err("Naming convention couldn't be detected.".to_owned())
+        const COULDNT_DETECT_FOR: &str = "Naming convention couldn't be detected for ";
+
+        match (flags[HAS_LOWER], flags[HAS_UPPER]) {
+            (true, true) => {
+                if flags[CANNOT_BE_CAMEL] {
+                    let leading_underscore_clause = if flags[HAS_INNER_UNDERSCORE] {
+                        " (after the leading underscore(s))."
+                    } else {
+                        ""
+                    };
+                    Err(format!(
+                        "{COULDNT_DETECT_FOR}{id}. It contains both lowercase and uppercase, but \
+                        it doesn't start with uppercase{leading_underscore_clause}."
+                    ))
+                } else if flags[HAS_INNER_UNDERSCORE] {
+                    Err(format!(
+                        "{COULDNT_DETECT_FOR}{id}. It contains both lowercase and uppercase, but \
+                        it also contains an inner underscore."
+                    ))
+                } else {
+                    Ok(IdentNameConvention::CamelCase)
+                }
+            }
+            (true, false) => Ok(IdentNameConvention::LowerCase),
+            (false, true) => {
+                if flags[HAS_INNER_UNDERSCORE] {
+                    Ok(IdentNameConvention::UpperCase)
+                } else {
+                    Err(format!(
+                        "{COULDNT_DETECT_FOR}{id}. It contains uppercase, no lowercase, and no inner underscore, but it could pass as either UPPERCASE or CamelCase (in Rust)."
+                    ))
+                }
+            },
+            (false, false) => Err(format!(
+                "{COULDNT_DETECT_FOR}{id}. It doesn't contain either lowercase or uppercase."
+            )),
         }
     }
 }
