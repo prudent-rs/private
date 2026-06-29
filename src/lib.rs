@@ -295,29 +295,49 @@ fn restricted_full_name(
 // --------------
 
 #[repr(transparent)]
-struct Labeled<const AUTO_LABEL: bool, V, L> {
+struct Labeled<V, L> {
     value: V,
     label: core::marker::PhantomData<L>,
 }
-impl<const AUTO_LABEL: bool, V, L> core::ops::Deref for Labeled<AUTO_LABEL, V, L> {
+impl<V, L> core::ops::Deref for Labeled<V, L> {
     type Target = V;
     fn deref(&self) -> &Self::Target {
         &self.value
     }
 }
-impl<const AUTO_LABEL: bool, V, L> Labeled<AUTO_LABEL, V, L> {
-    fn unlabel(self) -> V {
+
+trait UnlabelAuto<V, L> {
+    fn unlabel_auto(self) -> V;
+}
+impl<V, L> UnlabelAuto<V, L> for Labeled<V, L> {
+    fn unlabel_auto(self) -> V {
         self.value
     }
 }
+trait UnlabelSpec<V, L> {
+    fn unlabel_spec<L2>(self) -> V
+    where
+        L2: From<L>,
+        L: From<L2>;
+}
+impl<V, L> UnlabelSpec<V, L> for Labeled<V, L> {
+    fn unlabel_spec<L2>(self) -> V
+    where
+        L2: From<L>,
+        L: From<L2>,
+    {
+        self.value
+    }
+}
+
 trait IntoLabeledAuto<V, L> {
-    fn into_labeled_auto(self) -> Labeled<true, V, L>;
+    fn into_labeled_auto(self) -> Labeled<V, L>;
 }
 impl<F, V, L> IntoLabeledAuto<V, L> for F
 where
     F: Into<V>,
 {
-    fn into_labeled_auto(self) -> Labeled<true, V, L> {
+    fn into_labeled_auto(self) -> Labeled<V, L> {
         let value: V = self.into();
         Labeled {
             value,
@@ -326,13 +346,13 @@ where
     }
 }
 trait IntoLabeledSpecified<V> {
-    fn into_labeled_spec<L>(self) -> Labeled<false, V, L>;
+    fn into_labeled_spec<L>(self) -> Labeled<V, L>;
 }
 impl<F, V> IntoLabeledSpecified<V> for F
 where
     F: Into<V>,
 {
-    fn into_labeled_spec<L>(self) -> Labeled<false, V, L> {
+    fn into_labeled_spec<L>(self) -> Labeled<V, L> {
         let value: V = self.into();
         Labeled {
             value,
@@ -340,10 +360,8 @@ where
         }
     }
 }
-type LabeledAuto<V, L> = Labeled<true, V, L>;
-type LabeledSpecified<V, L> = Labeled<false, V, L>;
 
-type TokenStreamLabeled<L> = LabeledSpecified<TokenStream, L>;
+type TokenStreamLabeled<L> = Labeled<TokenStream, L>;
 //type MacroStreamResultLabeled<L> = Labeled<MacroStreamResult, L>;
 // --------------
 
@@ -509,7 +527,7 @@ pub fn use_direct(input: ProcTokenStream) -> ProcTokenStream {
 // --------------
 
 fn def_const_or_static_grammar(
-    input: LabeledSpecified<TokenStream, DefConstStatic>,
+    input: Labeled<TokenStream, DefConstStatic>,
     which: ItemChoice,
     create_direct_accessor: bool,
 ) -> MacroStreamResult {
